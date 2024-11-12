@@ -205,7 +205,14 @@
   <div id="main" class="container">
     <div class="input-section">
       <h2>Enter Instructions</h2>
-      <textarea id="code-input" placeholder="Enter your code, one instruction per line..."></textarea>
+      <textarea id="code-input">
+ ADDI $s0, $zero, 10
+ ADDI $s1, $zero, 9
+ JR $ra
+ SB $s0, -10($sp)
+ SB $s1, -9($sp)
+ LB $s2, -9($sp)
+      </textarea>
       <div class="controls">
         <button id="start-button">Start</button>
         <button id="stop-button" disabled>Stop</button>
