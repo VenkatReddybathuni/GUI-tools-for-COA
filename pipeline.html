@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">  
+<head>
+    <link rel="stylesheet" href="css/codemirror.css">
+    <script src="js/lib/codemirror.js"></script>
+    <script src="js/lib/jquery.min.js"></script>
+    <script src="js/lib/underscore-min.js"></script>
+    <script src="js/lib.js"></script>
+    <script src="js/examples.js"></script>
+    <script src="js/mips_syscalls.js"></script>
+    <script src="js/mips_instructions.js"></script>
+    <script src="js/mips_emulator.js"></script>
+    <script src="js/stack.js"></script>
+    <script src="js/main.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instruction Cycle Visualizer</title>
+    <style>
+      /* Improved styling for a cleaner look */
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #b4c6d9;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .input-section {
+        width: 45%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #99aad9;
+        border-radius: 8px;
+        box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+      }
+
+      h2 {
+        color: #333;
+        font-size: 1.5em;
+      }
+
+      textarea {
+        width: 100%;
+        height: 250px;
+        margin-bottom: 10px;
+        font-size: 16px;
+        max-width: 800px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        resize: vertical;
+        background-color: #F8F9FA;
+      }
+
+      .controls {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      #start-button {
+        background-color: #4CAF50;
+        color: white;
+      }
+
+      #start-button:hover {
+        background-color: #45a049;
+      }
+
+      #stop-button {
+        background-color: #f44336;
+        color: white;
+      }
+
+      #stop-button:hover {
+        background-color: #e53935;
+      }
+
+      #pipeline-container {
+        display: grid;
+        width: 55%;
+        gap: 2px;
+        border: 1px solid #ddd;
+        overflow-x: auto;
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .navbar {
+        background-color: #2c3e50;
+        color: white;
+        padding: 25px 0;
+        text-align: center;
+        position: fixed;
+        width: 100%;
+        top: 0;
+        left: 0;
+        z-index: 10;
+      }
+
+      .navbar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .navbar-brand {
+        display: flex;
+        align-items: center;
+        color: #777;
+        font-size: 1.5em;
+        font-weight: bold;
+        line-height: 20px;
+      }
+
+      .navbar-brand img {
+        padding-left: 10px;
+        height: 40px;
+        margin-right: 10px;
+      }
+
+      .home-button {
+        margin-right: 20px;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        font-size: 16px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      .home-button:hover {
+        background-color: #45a049;
+      }
+
+      .instruction-label {
+        text-align: left;
+        padding-left: 1px;
+        font-weight: bold;
+        background-color: #E6E6FA;
+        color: #333;
+        border-radius: 5px;
+      }
+
+      .pipeline-cell { 
+        width: 60px; 
+        height: 40px; 
+        text-align: center; 
+        font-weight: bold; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+      }
+
+      .container {
+        padding-top: 100px;
+        flex: 1;
+        display: flex;
+        justify-content: space-between;
+        margin: 20px;
+      }
+
+      .bubble {
+        background-color: #CFD8DC;
+        color: #333;
+      }
+
+      .fetch { background-color: #FFCDD2; color: white; }
+      .decode { background-color: #FFE0B2; color: black; }
+      .execute { background-color: #FFF9C4; color: black; }
+      .memory { background-color: #B3E5FC; color: black; }
+      .writeback { background-color: #C8E6C9; color: black; }
+    </style>
+</head>
+<body>
+
+  <nav class="navbar navbar-default">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <a class="navbar-brand">
+                <img src="cpu.svg" alt="Logo"> 
+                Instruction Cycle Visualizer
+            </a>
+            <button class="home-button" onclick="location.href='index.html'">Home</button>
+        </div>
+    </div>
+  </nav>
+
+  <div id="main" class="container">
+    <div class="input-section">
+      <h2>Enter Instructions</h2>
+      <textarea id="code-input" placeholder="Enter your code, one instruction per line..."></textarea>
+      <div class="controls">
+        <button id="start-button">Start</button>
+        <button id="stop-button" disabled>Stop</button>
+      </div>
+    </div>
+  
+    <div id="pipeline-container"></div>
+  </div>
+
+  <script>
+    const stages = ["fetch", "decode", "execute", "memory", "writeback"];
+    let instructions = [];
+    let intervalId = null;
+    let cycle = 0;
+
+    const pipelineContainer = document.getElementById("pipeline-container");
+    const codeInput = document.getElementById("code-input");
+
+    function initializeGrid() {
+      pipelineContainer.innerHTML = "";
+      const columns = instructions.length + stages.length + 3;
+      pipelineContainer.style.gridTemplateColumns = `200px repeat(${columns}, 60px)`;
+
+      const headerLabel = document.createElement("div");
+      headerLabel.classList.add("pipeline-cell");
+      headerLabel.textContent = "Instructions";
+      pipelineContainer.appendChild(headerLabel);
+
+      for (let i = 0; i < columns; i++) {
+        const headerCell = document.createElement("div");
+        headerCell.classList.add("pipeline-cell");
+        headerCell.textContent = i + 1;
+        pipelineContainer.appendChild(headerCell);
+      }
+
+      instructions.forEach((instr, rowIndex) => {
+        const labelCell = document.createElement("div");
+        labelCell.classList.add("instruction-label");
+        labelCell.textContent = instr;
+        pipelineContainer.appendChild(labelCell);
+
+        for (let i = 0; i < columns; i++) {
+          const cell = document.createElement("div");
+          cell.classList.add("pipeline-cell", `r${rowIndex}c${i}`);
+          pipelineContainer.appendChild(cell);
+        }
+      });
+    }
+
+    function clearPipeline() {
+      const cells = document.querySelectorAll(".pipeline-cell");
+      cells.forEach(cell => {
+        cell.className = "pipeline-cell";
+        cell.textContent = "";
+      });
+      cycle = 0;
+    }
+
+    function needsTwoStalls(instruction) {
+      return instruction.startsWith("BEQ") || instruction.startsWith("BNE") || instruction.startsWith("JR");
+    }
+
+    function needsOneStall(instruction) {
+      return (instruction.startsWith("J")||instruction.startsWith("JAL")) &&!instruction.startsWith("JR");
+    }
+
+    function simulateCycle() {
+      let nextFetchCycle = 0;
+
+      instructions.forEach((instruction, instrIndex) => {
+        let startCycle = nextFetchCycle;
+
+        // Apply stalls for branching and jumping instructions
+        if (needsTwoStalls(instruction)) {
+          startCycle += 2;
+        } else if (needsOneStall(instruction)) {
+          startCycle += 1;
+        }
+
+        // Fetch stage placement
+        if (cycle === startCycle) {
+          const cell = document.querySelector(`.r${instrIndex}c${startCycle}`);
+          if (cell) {
+            cell.classList.add("fetch");
+            cell.textContent = "F";
+          }
+        }
+
+        // Fill stall cells before fetch stage for current instruction
+        for (let stallCycle = nextFetchCycle; stallCycle < startCycle; stallCycle++) {
+          const cell = document.querySelector(`.r${instrIndex}c${stallCycle}`);
+          if (cell) {
+            cell.classList.add("bubble");
+            cell.textContent = "S";
+          }
+        }
+
+        // Place other stages sequentially after fetch, regardless of stalls
+        stages.slice(1).forEach((stage, stageIndex) => {
+          const stageCycle = startCycle + stageIndex + 1;
+          if (cycle === stageCycle) {
+            const cell = document.querySelector(`.r${instrIndex}c${stageCycle}`);
+            if (cell) {
+              cell.classList.add(stage);
+              cell.textContent = stage[0].toUpperCase();
+            }
+          }
+        });
+
+        // Update fetch cycle for the next instruction, without stall adjustments
+        nextFetchCycle = startCycle + 1;
+      });
+
+      cycle++; // Move to the next cycle
+      if (cycle > instructions.length + stages.length + 2) {
+        stopSimulation(); // Stop simulation when done
+      }
+    }
+
+    function startSimulation() {
+      instructions = codeInput.value
+        .split("\n")
+        .map(line => line.split('#')[0].trim())
+        .filter(line => line !== "");
+
+      if (instructions.length === 0) return;
+
+      clearPipeline();
+      initializeGrid();
+
+      intervalId = setInterval(simulateCycle, 500);
+      document.getElementById("start-button").disabled = true;
+      document.getElementById("stop-button").disabled = false;
+    }
+
+    function stopSimulation() {
+      clearInterval(intervalId);
+      intervalId = null;
+      document.getElementById("start-button").disabled = false;
+      document.getElementById("stop-button").disabled = true;
+    }
+
+    document.getElementById("start-button").addEventListener("click", startSimulation);
+    document.getElementById("stop-button").addEventListener("click", stopSimulation);
+  </script>
+
+</body>
+</html>
