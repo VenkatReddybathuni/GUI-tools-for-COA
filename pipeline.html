@@ -206,12 +206,12 @@
     <div class="input-section">
       <h2>Enter Instructions</h2>
       <textarea id="code-input">
- ADDI $s0, $zero, 10
- ADDI $s1, $zero, 9
- JR $ra
- SB $s0, -10($sp)
- SB $s1, -9($sp)
- LB $s2, -9($sp)
+ADDI $s0, $zero, 10
+ADDI $s1, $zero, 9
+JR $ra
+SB $s0, -10($sp)
+SB $s1, -9($sp)
+LB $s2, -9($sp)
       </textarea>
       <div class="controls">
         <button id="start-button">Start</button>
@@ -281,18 +281,19 @@
 
     function simulateCycle() {
       let nextFetchCycle = 0;
-
+    
       instructions.forEach((instruction, instrIndex) => {
         let startCycle = nextFetchCycle;
-
-        // Apply stalls for branching and jumping instructions
-        if (needsTwoStalls(instruction)) {
-          startCycle += 2;
-        } else if (needsOneStall(instruction)) {
-          startCycle += 1;
+    
+        // Adjust fetch position for branch instructions to align with decode of the previous instruction
+        if (needsTwoStalls(instruction) || needsOneStall(instruction)) {
+          if (instrIndex > 0) {
+            // Align fetch of branch with the decode stage of the previous instruction
+            startCycle = nextFetchCycle; // Align with decode of the previous instruction
+          }
         }
-
-        // Fetch stage placement
+    
+        // Place the fetch stage
         if (cycle === startCycle) {
           const cell = document.querySelector(`.r${instrIndex}c${startCycle}`);
           if (cell) {
@@ -300,17 +301,37 @@
             cell.textContent = "F";
           }
         }
-
-        // Fill stall cells before fetch stage for current instruction
-        for (let stallCycle = nextFetchCycle; stallCycle < startCycle; stallCycle++) {
-          const cell = document.querySelector(`.r${instrIndex}c${stallCycle}`);
-          if (cell) {
-            cell.classList.add("bubble");
-            cell.textContent = "S";
+    
+        // Add stalls for the instruction following the branch
+        if (needsTwoStalls(instruction)) {
+          const nextInstrIndex = instrIndex + 1;
+          if (nextInstrIndex < instructions.length) {
+            // Add two stalls for the next instruction
+            for (let stallCycle = startCycle + 1; stallCycle < startCycle + 3; stallCycle++) {
+              const stallCell = document.querySelector(`.r${nextInstrIndex}c${stallCycle}`);
+              if (stallCell) {
+                stallCell.classList.add("bubble");
+                stallCell.textContent = "S";
+              }
+            }
+            nextFetchCycle = startCycle + 3;
           }
+        } else if (needsOneStall(instruction)) {
+          const nextInstrIndex = instrIndex + 1;
+          if (nextInstrIndex < instructions.length) {
+            // Add one stall for the next instruction
+            const stallCell = document.querySelector(`.r${nextInstrIndex}c${startCycle + 1}`);
+            if (stallCell) {
+              stallCell.classList.add("bubble");
+              stallCell.textContent = "S";
+            }
+            nextFetchCycle = startCycle + 2;
+          }
+        } else {
+          nextFetchCycle = startCycle + 1;
         }
-
-        // Place other stages sequentially after fetch, regardless of stalls
+    
+        // Place other stages (decode, execute, etc.) sequentially
         stages.slice(1).forEach((stage, stageIndex) => {
           const stageCycle = startCycle + stageIndex + 1;
           if (cycle === stageCycle) {
@@ -321,16 +342,16 @@
             }
           }
         });
-
-        // Update fetch cycle for the next instruction, without stall adjustments
-        nextFetchCycle = startCycle + 1;
       });
-
+    
       cycle++; // Move to the next cycle
       if (cycle > instructions.length + stages.length + 2) {
-        stopSimulation(); // Stop simulation when done
+        stopSimulation();
       }
     }
+    
+    
+    
 
     function startSimulation() {
       instructions = codeInput.value
